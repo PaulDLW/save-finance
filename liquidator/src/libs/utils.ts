@@ -1,22 +1,30 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable no-restricted-syntax */
-import { ASSOCIATED_TOKEN_PROGRAM_ID, Token, TOKEN_PROGRAM_ID } from '@solana/spl-token';
-import { Connection, PublicKey } from '@solana/web3.js';
 import {
-  OBLIGATION_SIZE, parseObligation, parseReserve, Reserve, RESERVE_SIZE,
-} from '@solendprotocol/solend-sdk';
-import BigNumber from 'bignumber.js';
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+  Token,
+  TOKEN_PROGRAM_ID,
+} from "@solana/spl-token";
+import { Connection, PublicKey } from "@solana/web3.js";
 import {
-  LiquidityToken, MarketConfig, TokenCount,
-} from 'global';
-import { findWhere } from 'underscore';
-import { TokenOracleData } from './pyth';
-import { Borrow } from './refreshObligation';
+  OBLIGATION_SIZE,
+  parseObligation,
+  parseReserve,
+  Reserve,
+  RESERVE_SIZE,
+} from "@solendprotocol/solend-sdk";
+import BigNumber from "bignumber.js";
+import { LiquidityToken, MarketConfig, TokenCount } from "global";
+import { findWhere } from "underscore";
+import { TokenOracleData } from "./oracle";
+import { Borrow } from "./refreshObligation";
 
-export const WAD = new BigNumber(`1${''.padEnd(18, '0')}`);
-export const U64_MAX = '18446744073709551615';
+export const WAD = new BigNumber(`1${"".padEnd(18, "0")}`);
+export const U64_MAX = "18446744073709551615";
 const INITIAL_COLLATERAL_RATIO = 1;
-const INITIAL_COLLATERAL_RATE = new BigNumber(INITIAL_COLLATERAL_RATIO).multipliedBy(WAD);
+const INITIAL_COLLATERAL_RATE = new BigNumber(
+  INITIAL_COLLATERAL_RATIO
+).multipliedBy(WAD);
 
 // Converts amount to human (rebase with decimals)
 export function toHuman(market: MarketConfig, amount: string, symbol: string) {
@@ -24,7 +32,11 @@ export function toHuman(market: MarketConfig, amount: string, symbol: string) {
   return toHumanDec(amount, decimals);
 }
 
-export function toBaseUnit(market: MarketConfig, amount: string, symbol: string) {
+export function toBaseUnit(
+  market: MarketConfig,
+  amount: string,
+  symbol: string
+) {
   if (amount === U64_MAX) return amount;
   const decimals = getDecimals(market, symbol);
   return toBaseUnitDec(amount, decimals);
@@ -37,9 +49,9 @@ function toBaseUnitDec(amount: string, decimals: number) {
     throw new Error(`Invalid decimal ${decimals}`);
   }
   if ((amount.match(/\./g) || []).length > 1) {
-    throw new Error('Too many decimal points');
+    throw new Error("Too many decimal points");
   }
-  let decimalIndex = amount.indexOf('.');
+  let decimalIndex = amount.indexOf(".");
   let precision;
   if (decimalIndex === -1) {
     precision = 0;
@@ -53,14 +65,14 @@ function toBaseUnitDec(amount: string, decimals: number) {
   if (precision < decimals) {
     const numTrailingZeros = decimals - precision;
     return (
-      amount.slice(0, decimalIndex)
-      + amount.slice(decimalIndex + 1)
-      + ''.padEnd(numTrailingZeros, '0')
+      amount.slice(0, decimalIndex) +
+      amount.slice(decimalIndex + 1) +
+      "".padEnd(numTrailingZeros, "0")
     );
   }
   return (
-    amount.slice(0, decimalIndex)
-    + amount.slice(decimalIndex + 1, decimalIndex + decimals + 1)
+    amount.slice(0, decimalIndex) +
+    amount.slice(decimalIndex + 1, decimalIndex + decimals + 1)
   );
 }
 
@@ -71,7 +83,10 @@ function getDecimals(market: MarketConfig, symbol: string) {
 
 // Returns token info from config
 export function getTokenInfo(market: MarketConfig, symbol: string) {
-  const tokenInfo = findWhere(market.reserves.map((reserve) => reserve.liquidityToken), { symbol });
+  const tokenInfo = findWhere(
+    market.reserves.map((reserve) => reserve.liquidityToken),
+    { symbol }
+  );
   if (!tokenInfo) {
     throw new Error(`Could not find ${symbol} in config.assets`);
   }
@@ -79,7 +94,10 @@ export function getTokenInfo(market: MarketConfig, symbol: string) {
 }
 
 export function getTokenInfoFromMarket(market: MarketConfig, symbol: string) {
-  const liquidityToken: LiquidityToken = findWhere(market.reserves.map((reserve) => reserve.liquidityToken), { symbol })!;
+  const liquidityToken: LiquidityToken = findWhere(
+    market.reserves.map((reserve) => reserve.liquidityToken),
+    { symbol }
+  )!;
   if (!liquidityToken) {
     throw new Error(`Could not find ${symbol} in config.assets`);
   }
@@ -97,7 +115,9 @@ export function wait(ms: number) {
 }
 
 function toHumanDec(amount: string, decimals: number) {
-  let amountStr = amount.slice(amount.length - Math.min(decimals, amount.length));
+  let amountStr = amount.slice(
+    amount.length - Math.min(decimals, amount.length)
+  );
   if (decimals > amount.length) {
     for (let i = 0; i < decimals - amount.length; i += 1) {
       amountStr = `0${amountStr}`;
@@ -109,8 +129,8 @@ function toHumanDec(amount: string, decimals: number) {
       amountStr = amount[i] + amountStr;
     }
   }
-  amountStr = stripEnd(amountStr, '0');
-  amountStr = stripEnd(amountStr, '.');
+  amountStr = stripEnd(amountStr, "0");
+  amountStr = stripEnd(amountStr, ".");
   return amountStr;
 }
 
@@ -126,14 +146,20 @@ function stripEnd(s: string, c: string) {
 }
 
 export function getProgramIdForCurrentDeployment(): string {
-  return {
-    beta: 'BLendhFh4HGnycEDDFhbeFEUYLP4fXB5tTHMoTX8Dch5',
-    production: 'So1endDq2YkqhipRh3WViPa8hdiSpxWy6z3Z6tMCpAo',
-    staging: 'ALend7Ketfx5bxh6ghsCDXAoDrhvEmsXT3cynB6aPLgx',
-  }[process.env.APP || 'production'] || 'So1endDq2YkqhipRh3WViPa8hdiSpxWy6z3Z6tMCpAo';
+  return (
+    {
+      beta: "BLendhFh4HGnycEDDFhbeFEUYLP4fXB5tTHMoTX8Dch5",
+      production: "So1endDq2YkqhipRh3WViPa8hdiSpxWy6z3Z6tMCpAo",
+      staging: "ALend7Ketfx5bxh6ghsCDXAoDrhvEmsXT3cynB6aPLgx",
+    }[process.env.APP || "production"] ||
+    "So1endDq2YkqhipRh3WViPa8hdiSpxWy6z3Z6tMCpAo"
+  );
 }
 
-export async function getObligations(connection: Connection, lendingMarketAddr) {
+export async function getObligations(
+  connection: Connection,
+  lendingMarketAddr
+) {
   const programID = getProgramIdForCurrentDeployment();
   const resp = await connection.getProgramAccounts(new PublicKey(programID), {
     commitment: connection.commitment,
@@ -146,11 +172,14 @@ export async function getObligations(connection: Connection, lendingMarketAddr) 
       },
       {
         dataSize: OBLIGATION_SIZE,
-      }],
-    encoding: 'base64',
+      },
+    ],
+    encoding: "base64",
   });
 
-  return resp.map((account) => parseObligation(account.pubkey, account.account));
+  return resp.map((account) =>
+    parseObligation(account.pubkey, account.account)
+  );
 }
 
 export async function getReserves(connection: Connection, lendingMarketAddr) {
@@ -168,36 +197,55 @@ export async function getReserves(connection: Connection, lendingMarketAddr) {
         dataSize: RESERVE_SIZE,
       },
     ],
-    encoding: 'base64',
+    encoding: "base64",
   });
 
   return resp.map((account) => parseReserve(account.pubkey, account.account));
 }
 
-export async function getWalletBalances(connection, wallet, tokensOracle, market) {
+export async function getWalletBalances(
+  connection,
+  wallet,
+  tokensOracle,
+  market
+) {
   const promises: Promise<any>[] = [];
   for (const [key, value] of Object.entries(tokensOracle)) {
     if (value) {
       const tokenOracleData = value as TokenOracleData;
-      promises.push(getWalletTokenData(connection, market, wallet, tokenOracleData.mintAddress, tokenOracleData.symbol));
+      promises.push(
+        getWalletTokenData(
+          connection,
+          market,
+          wallet,
+          tokenOracleData.mintAddress,
+          tokenOracleData.symbol
+        )
+      );
     }
   }
   const walletBalances = await Promise.all(promises);
   return walletBalances;
 }
 
-export async function getWalletTokenData(connection: Connection, market: MarketConfig, wallet, mintAddress, symbol) {
+export async function getWalletTokenData(
+  connection: Connection,
+  market: MarketConfig,
+  wallet,
+  mintAddress,
+  symbol
+) {
   const token = new Token(
     connection,
     new PublicKey(mintAddress),
     TOKEN_PROGRAM_ID,
-    wallet.publicKey,
+    wallet.publicKey
   );
   const userTokenAccount = await Token.getAssociatedTokenAddress(
     ASSOCIATED_TOKEN_PROGRAM_ID,
     TOKEN_PROGRAM_ID,
     new PublicKey(mintAddress),
-    wallet.publicKey,
+    wallet.publicKey
   );
 
   try {
@@ -221,18 +269,23 @@ export async function getWalletTokenData(connection: Connection, market: MarketC
 
 export const findAssociatedTokenAddress = async (
   walletAddress: PublicKey,
-  tokenMintAddress: PublicKey,
-) => (
-  await PublicKey.findProgramAddress(
-    [walletAddress.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), tokenMintAddress.toBuffer()],
-    ASSOCIATED_TOKEN_PROGRAM_ID,
-  )
-)[0];
+  tokenMintAddress: PublicKey
+) =>
+  (
+    await PublicKey.findProgramAddress(
+      [
+        walletAddress.toBuffer(),
+        TOKEN_PROGRAM_ID.toBuffer(),
+        tokenMintAddress.toBuffer(),
+      ],
+      ASSOCIATED_TOKEN_PROGRAM_ID
+    )
+  )[0];
 
 export const getWalletBalance = async (
   connection: Connection,
   mint: PublicKey,
-  walletAddress: PublicKey,
+  walletAddress: PublicKey
 ): Promise<number> => {
   const userAta = await findAssociatedTokenAddress(walletAddress, mint);
 
@@ -249,11 +302,11 @@ export const getWalletBalance = async (
 
 export function getWalletDistTarget() {
   const target: TokenCount[] = [];
-  const targetRaw = process.env.TARGETS || '';
+  const targetRaw = process.env.TARGETS || "";
 
-  const targetDistributions = targetRaw.split(' ');
+  const targetDistributions = targetRaw.split(" ");
   for (const dist of targetDistributions) {
-    const tokens = dist.split(':');
+    const tokens = dist.split(":");
     const asset = tokens[0];
     const unitAmount = tokens[1];
 
@@ -266,7 +319,10 @@ export function getWalletDistTarget() {
 }
 
 export const getCollateralExchangeRate = (reserve: Reserve): BigNumber => {
-  const totalLiquidity = (new BigNumber(reserve.liquidity.availableAmount.toString()).multipliedBy(WAD))
+  const totalLiquidity = new BigNumber(
+    reserve.liquidity.availableAmount.toString()
+  )
+    .multipliedBy(WAD)
     .plus(new BigNumber(reserve.liquidity.borrowedAmountWads.toString()));
 
   const { collateral } = reserve;
@@ -275,19 +331,18 @@ export const getCollateralExchangeRate = (reserve: Reserve): BigNumber => {
     rate = INITIAL_COLLATERAL_RATE;
   } else {
     const { mintTotalSupply } = collateral;
-    rate = (new BigNumber(mintTotalSupply.toString()).multipliedBy(WAD))
+    rate = new BigNumber(mintTotalSupply.toString())
+      .multipliedBy(WAD)
       .dividedBy(new BigNumber(totalLiquidity.toString()));
   }
   return rate;
 };
 
-export const getLoanToValueRate = (reserve: Reserve): BigNumber => new BigNumber(
-  reserve.config.loanToValueRatio / 100,
-);
+export const getLoanToValueRate = (reserve: Reserve): BigNumber =>
+  new BigNumber(reserve.config.loanToValueRatio / 100);
 
-export const getLiquidationThresholdRate = (reserve: Reserve): BigNumber => new BigNumber(
-  reserve.config.liquidationThreshold / 100,
-);
+export const getLiquidationThresholdRate = (reserve: Reserve): BigNumber =>
+  new BigNumber(reserve.config.liquidationThreshold / 100);
 
 export const sortBorrows = (borrows: Borrow[]): Borrow[] => {
   return borrows.sort((a, b) => {

@@ -1,4 +1,7 @@
 {
   "private": true,
-  "workspaces": ["liquidator", "solend-sdk", "solend-lite"]
+  "workspaces": [
+    "liquidator"
+  ],
+  "dependencies": {}
 }

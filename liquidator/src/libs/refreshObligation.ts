@@ -1,12 +1,19 @@
 /* eslint-disable @typescript-eslint/no-throw-literal */
-import BigNumber from 'bignumber.js';
-import { findWhere, find } from 'underscore';
-import { PublicKey } from '@solana/web3.js';
-import BN from 'bn.js';
-import { Obligation, ObligationCollateral, ObligationLiquidity } from '@solendprotocol/solend-sdk';
+import { PublicKey } from "@solana/web3.js";
 import {
-  getCollateralExchangeRate, getLiquidationThresholdRate, getLoanToValueRate, WAD,
-} from './utils';
+  Obligation,
+  ObligationCollateral,
+  ObligationLiquidity,
+} from "@solendprotocol/solend-sdk";
+import BigNumber from "bignumber.js";
+import BN from "bn.js";
+import { find, findWhere } from "underscore";
+import {
+  getCollateralExchangeRate,
+  getLiquidationThresholdRate,
+  getLoanToValueRate,
+  WAD,
+} from "./utils";
 
 export const RISKY_OBLIGATION_THRESHOLD = 78;
 
@@ -16,7 +23,7 @@ export const RISKY_OBLIGATION_THRESHOLD = 78;
 export function calculateRefreshedObligation(
   obligation: Obligation,
   reserves,
-  tokensOracle,
+  tokensOracle
 ) {
   let depositedValue = new BigNumber(0);
   let borrowedValue = new BigNumber(0);
@@ -26,12 +33,17 @@ export function calculateRefreshedObligation(
   const borrows = [] as Borrow[];
 
   obligation.deposits.forEach((deposit: ObligationCollateral) => {
-    const tokenOracle = findWhere(tokensOracle, { reserveAddress: deposit.depositReserve.toString() });
+    const tokenOracle = findWhere(tokensOracle, {
+      reserveAddress: deposit.depositReserve.toString(),
+    });
     if (!tokenOracle) {
       throw `Missing token info for reserve ${deposit.depositReserve.toString()}, skipping this obligation. Please restart liquidator to fetch latest configs from /v1/config`;
     }
     const { price, decimals, symbol } = tokenOracle;
-    const reserve = find(reserves, (r) => r.pubkey.toString() === deposit.depositReserve.toString()).info;
+    const reserve = find(
+      reserves,
+      (r) => r.pubkey.toString() === deposit.depositReserve.toString()
+    ).info;
 
     const collateralExchangeRate = getCollateralExchangeRate(reserve);
     const marketValue = new BigNumber(deposit.depositedAmount.toString())
@@ -44,8 +56,12 @@ export function calculateRefreshedObligation(
     const liquidationThresholdRate = getLiquidationThresholdRate(reserve);
 
     depositedValue = depositedValue.plus(marketValue);
-    allowedBorrowValue = allowedBorrowValue.plus(marketValue.multipliedBy(loanToValueRate));
-    unhealthyBorrowValue = unhealthyBorrowValue.plus(marketValue.multipliedBy(liquidationThresholdRate));
+    allowedBorrowValue = allowedBorrowValue.plus(
+      marketValue.multipliedBy(loanToValueRate)
+    );
+    unhealthyBorrowValue = unhealthyBorrowValue.plus(
+      marketValue.multipliedBy(liquidationThresholdRate)
+    );
 
     deposits.push({
       depositReserve: deposit.depositReserve,
@@ -56,20 +72,24 @@ export function calculateRefreshedObligation(
   });
 
   obligation.borrows.forEach((borrow: ObligationLiquidity) => {
-    const borrowAmountWads = new BigNumber(borrow.borrowedAmountWads.toString());
-    const tokenOracle = findWhere(tokensOracle,
-      { reserveAddress: borrow.borrowReserve.toString() });
+    const borrowAmountWads = new BigNumber(
+      borrow.borrowedAmountWads.toString()
+    );
+    const tokenOracle = findWhere(tokensOracle, {
+      reserveAddress: borrow.borrowReserve.toString(),
+    });
     if (!tokenOracle) {
       throw `Missing token info for reserve ${borrow.borrowReserve.toString()}, skipping this obligation. Please restart liquidator to fetch latest config from /v1/config.`;
     }
-    const {
-      price, decimals, symbol, mintAddress,
-    } = tokenOracle;
-    const reserve = find(reserves, (r) => r.pubkey.toString() === borrow.borrowReserve.toString()).info;
+    const { price, decimals, symbol, mintAddress } = tokenOracle;
+    const reserve = find(
+      reserves,
+      (r) => r.pubkey.toString() === borrow.borrowReserve.toString()
+    ).info;
     const borrowAmountWadsWithInterest = getBorrrowedAmountWadsWithInterest(
       new BigNumber(reserve.liquidity.cumulativeBorrowRateWads.toString()),
       new BigNumber(borrow.cumulativeBorrowRateWads.toString()),
-      borrowAmountWads,
+      borrowAmountWads
     );
 
     const marketValue = borrowAmountWadsWithInterest
@@ -88,7 +108,10 @@ export function calculateRefreshedObligation(
     });
   });
 
-  let utilizationRatio = borrowedValue.dividedBy(depositedValue).multipliedBy(100).toNumber();
+  let utilizationRatio = borrowedValue
+    .dividedBy(depositedValue)
+    .multipliedBy(100)
+    .toNumber();
   utilizationRatio = Number.isNaN(utilizationRatio) ? 0 : utilizationRatio;
 
   return {
@@ -105,9 +128,13 @@ export function calculateRefreshedObligation(
 function getBorrrowedAmountWadsWithInterest(
   reserveCumulativeBorrowRateWads: BigNumber,
   obligationCumulativeBorrowRateWads: BigNumber,
-  obligationBorrowAmountWads: BigNumber,
+  obligationBorrowAmountWads: BigNumber
 ) {
-  switch (reserveCumulativeBorrowRateWads.comparedTo(obligationCumulativeBorrowRateWads)) {
+  switch (
+    reserveCumulativeBorrowRateWads.comparedTo(
+      obligationCumulativeBorrowRateWads
+    )
+  ) {
     case -1: {
       // less than
       console.error(`Interest rate cannot be negative.
@@ -121,7 +148,9 @@ function getBorrrowedAmountWadsWithInterest(
     }
     case 1: {
       // greater than
-      const compoundInterestRate = reserveCumulativeBorrowRateWads.dividedBy(obligationCumulativeBorrowRateWads);
+      const compoundInterestRate = reserveCumulativeBorrowRateWads.dividedBy(
+        obligationCumulativeBorrowRateWads
+      );
       return obligationBorrowAmountWads.multipliedBy(compoundInterestRate);
     }
     default: {
@@ -137,14 +166,14 @@ export type Borrow = {
   borrowReserve: PublicKey;
   borrowAmountWads: BN;
   marketValue: BigNumber;
-  mintAddress: string,
+  mintAddress: string;
   symbol: string;
   addedBorrowWeightBPS: BN;
 };
 
 type Deposit = {
-  depositReserve: PublicKey,
-  depositAmount: BN,
-  marketValue: BigNumber,
+  depositReserve: PublicKey;
+  depositAmount: BN;
+  marketValue: BigNumber;
   symbol: string;
 };
